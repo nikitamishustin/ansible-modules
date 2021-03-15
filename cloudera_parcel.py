@@ -6,6 +6,7 @@ from cm_client.rest import ApiException
 import cm_client
 from ansible.module_utils.basic import AnsibleModule
 import re
+from functools import wraps
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.0",
@@ -43,8 +44,9 @@ def build_module():
 
 
 class Parcel:
-    def __init__(self, name, version, cluster_name, api_client, no_wait=False, **kwargs):
+    def __init__(self, name, version, cluster_name, api_client, module, no_wait=False, **kwargs):
         self.name = name
+        self.module = module
         self.cluster_name = cluster_name
         self.api_client = api_client
         self.parcel_api_client_instance = cm_client.ParcelResourceApi(self.api_client)
@@ -57,23 +59,42 @@ class Parcel:
         self.changed = False
         self._update()
 
+    # Try-except decorator to log errors on the cluster management API requests.
+    class Decorators(object):
+        @classmethod
+        def try_cm_api(cls, func, *args):
+            @wraps(func)
+            def wrapper(*args):
+                try:
+                    return func(*args)
+                except ApiException as e:
+                    args[0].module.fail_json(msg=f"Cluster Manager error : {e}")
+            return wrapper
+
     def _update(self):
         self.stage = self._get_stage()
         self.status = self._get_status()
 
+    @Decorators.try_cm_api
     def _get_status(self):
         return self.parcel_api_client_instance.read_parcel(self.cluster_name, self.name, self.version).state
 
+    @Decorators.try_cm_api
     def _get_stage(self):
         return self.parcel_api_client_instance.read_parcel(self.cluster_name, self.name, self.version).stage.lower()
 
+    @Decorators.try_cm_api
     def _get_cluster_version(self):
         return self.api_instance.get_version().version
+
+    @Decorators.try_cm_api
+    def _get_parcels_list(self):
+        return self.parcels_api_client_instance.read_parcels(self.cluster_name).items
 
     def _get_versions(self, version):
         if version == "latest":
             versions = []
-            for parcel in self.parcels_api_client_instance.read_parcels(self.cluster_name).items:
+            for parcel in self._get_parcels_list():
                 guess = re.compile(f'^.*cdh{self.cluster_version[0]}$')  # i.e. "^.*cdh6$"
                 if (parcel.product == self.name):
                     # Kinda guessing the version of Fusion Client. I have doubts about it.
@@ -92,13 +113,37 @@ class Parcel:
             time.sleep(1)
             self._update()
 
+    @Decorators.try_cm_api
+    def _download(self):
+        self.parcel_api_client_instance.start_download_command(self.cluster_name, self.name, self.version)
+
+    @Decorators.try_cm_api
+    def _distribute(self):
+        self.parcel_api_client_instance.start_distribution_command(self.cluster_name, self.name, self.version)
+
+    @Decorators.try_cm_api
+    def _acrivate(self):
+        self.parcel_api_client_instance.activate_command(self.cluster_name, self.name, self.version)
+
+    @Decorators.try_cm_api
+    def _deacrivate(self):
+        self.parcel_api_client_instance.deactivate_command(self.cluster_name, self.name, self.version)
+
+    @Decorators.try_cm_api
+    def _remove_distribution(self):
+        self.parcel_api_client_instance.start_removal_of_distribution_command(self.cluster_name, self.name, self.version)
+
+    @Decorators.try_cm_api
+    def _remove_downloaded(self):
+        self.parcel_api_client_instance.remove_download_command(self.cluster_name, self.name, self.version)
+
     def downloaded(self):
         if self.stage != "downloaded":
             if self.stage == "activated":
                 self.deactivate()
             if self.stage == "distributed":
                 self.undistribute()
-            self.parcel_api_client_instance.start_download_command(self.cluster_name, self.name, self.version)
+            self._download()
             self._check_transition()
             self.changed = True
 
@@ -109,7 +154,7 @@ class Parcel:
                     self.downloaded()
                 elif self.stage == "activated":
                     self.deactivate()
-            self.parcel_api_client_instance.start_distribution_command(self.cluster_name, self.name, self.version)
+            self._distribute()
             self._check_transition()
             self.changed = True
 
@@ -117,17 +162,16 @@ class Parcel:
         if self.stage != "activated":
             if self.stage != "distributed":
                 self.distributed()
-            self.parcel_api_client_instance.activate_command(self.cluster_name, self.name, self.version)
+            self._acrivate()
             self._check_transition()
             self.changed = True
 
     def deactivate(self):
-        self.parcel_api_client_instance.deactivate_command(self.cluster_name, self.name, self.version)
+        self._deacrivate()
         self._check_transition()
 
     def undistribute(self):
-        self.parcel_api_client_instance.start_removal_of_distribution_command(
-            self.cluster_name, self.name, self.version)
+        self._remove_distribution()
         self._check_transition()
 
     def available_remotely(self):
@@ -137,7 +181,7 @@ class Parcel:
                     self.deactivate()
                 if self.stage == "distributed":
                     self.undistribute()
-            self.parcel_api_client_instance.remove_download_command(self.cluster_name, self.name, self.version)
+            self._remove_downloaded()
             self._check_transition()
             self.changed = True
 
@@ -185,7 +229,7 @@ def main():
                         continue
                     # Info about a specific version? "Latest" will not work here.
                     # TODO: Regex and "latest" detection
-                    supposed_parcel = Parcel(params["product"], params["version"], params["cluster_name"], api_client)
+                    supposed_parcel = Parcel(params["product"], params["version"], params["cluster_name"], api_client, module)
                     if supposed_parcel.version != parcel.version:
                         continue
                 parcels.append(
@@ -193,7 +237,8 @@ def main():
                         name=parcel.product,
                         version=parcel.version,
                         cluster_name=parcel.cluster_ref.cluster_name,
-                        api_client=api_client
+                        api_client=api_client,
+                        module=module
                     ).meta()
                 )
             module.exit_json(changed=False, msg="Parcels informations gathered", meta=parcels)
@@ -201,7 +246,7 @@ def main():
             module.fail_json(msg=f"Cluster error : {e}")
     else:
         if params["product"] is not None:
-            parcel = Parcel(params["product"], params["version"], params["cluster_name"], api_client)
+            parcel = Parcel(params["product"], params["version"], params["cluster_name"], api_client, module)
             try:
                 getattr(parcel, choice_map.get(params["state"]))()
             except ApiException as e:

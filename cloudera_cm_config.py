@@ -6,6 +6,7 @@ from cm_client import ApiConfig, ApiConfigList
 import cm_client
 from ansible.module_utils.basic import AnsibleModule
 import time
+from functools import wraps
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.0",
@@ -39,18 +40,61 @@ def build_module():
     return module
 
 
-class CM:
-    def __init__(self, name, api_client):
+class CM(object):
+    def __init__(self, name, api_client, module):
         self.name = name
+        self.module = module
         self.cm_resource_api_client = cm_client.ClouderaManagerResourceApi(api_client)
+        self.cm_cluster_api_client = cm_client.ClustersResourceApi(api_client)
         self.command_resource_api_client = cm_client.CommandsResourceApi(api_client)
         self.config = self._get_config()
+        self.clusters = self._get_clusters()
         self.changed = False
         self.parcels_refresh_command = None
+        self.clusters_refresh_commands = None
+
+    # Try-except decorator to log errors on the cluster management API requests.
+    class Decorators(object):
+        @classmethod
+        def try_cm_api(cls, func, *args):
+            @wraps(func)
+            def wrapper(*args):
+                try:
+                    return func(*args)
+                except ApiException as e:
+                    args[0].module.fail_json(msg=f"Cluster Manager error : {e}")
+            return wrapper
+
+    @Decorators.try_cm_api
+    def _get_config_content(self):
+        return self.cm_resource_api_client.get_config().items
+
+    @Decorators.try_cm_api
+    def _get_clusters(self):
+        return self.cm_cluster_api_client.read_clusters(cluster_type="any", view="summary").items
+
+    @Decorators.try_cm_api
+    def _update_config(self):
+        self.cm_resource_api_client.update_config(body=self.body)
+
+    @Decorators.try_cm_api
+    def _refresh_parcel_repos(self):
+        return self.cm_resource_api_client.refresh_parcel_repos()
+
+    @Decorators.try_cm_api
+    def _refresh_clusters_config(self):
+        return_commands = []
+        for cluster in self.clusters:
+            return_commands.append(self.cm_cluster_api_client.refresh(cluster.name))
+        return(return_commands)
+
+    @Decorators.try_cm_api
+    def _read_command(self, id):
+        return self.command_resource_api_client.read_command(id)
 
     def _get_config(self):
         prop_dict = {}
-        for prop in self.cm_resource_api_client.get_config().items:
+        for prop in self._get_config_content():
             if ',' in prop.value:
                 prop_dict[prop.name] = prop.value.split(',')
             else:
@@ -60,18 +104,18 @@ class CM:
     def set_prop(self, name, state, value=None, override=False):
         value = str(value)
         if state == 'set':
-            if self.config[name] != [value]:
+            if self.config.get(name, []) != [value]:
                 self.config[name] = [value]
                 self.changed = True
         elif state == 'append':
-            if value not in self.config[name]:
-                self.config[name].append(value)
+            if value not in self.config.get(name, []):
+                self.config.setdefault(name, []).append(value)
                 self.changed = True
         elif state == 'absent':
-            if value in self.config[name]:
-                for num, item in enumerate(self.config[name]):
+            if value in self.config.get(name, []):
+                for num, item in enumerate(self.config.get(name)):
                     if item == value:
-                        self.config[name].pop(num)
+                        self.config.get(name).pop(num)
                         self.changed = True
                         break
         self._put_state(name)
@@ -84,21 +128,44 @@ class CM:
                 value=','.join(value)
             )
             config_body.append(prop_dict)
-        body = ApiConfigList(config_body)
-        self.cm_resource_api_client.update_config(body=body)
-        # Refreshing is not momentary, we need to wait until refresh command will be inactive.
-        if 'parcel' in new_prop.lower():
-            parcel_refresh_command = self.cm_resource_api_client.refresh_parcel_repos()
-            while self.command_resource_api_client.read_command(int(parcel_refresh_command.id)).active:
+        self.body = ApiConfigList(config_body)
+        self._update_config()
+        # Refreshing is not momentary, we need to wait until parcel repo refresh command will be inactive.
+        if new_prop.lower() in ('parcel_repo_path', 'remote_parcel_repo_urls'):
+            # Refresh parcels repo
+            command = self._refresh_parcel_repos()
+            while self._read_command(int(command.id)).active:
                 time.sleep(3)
             # Adding ApiCommand object to self
-            self.parcels_refresh_command = self.command_resource_api_client.read_command(int(parcel_refresh_command.id))
+            self.parcels_refresh_command = self._read_command(int(command.id))
+        else:
+            # Refresh all clusters configs
+            commands = self._refresh_clusters_config()
+            active_commands_count = len(commands)
+            while active_commands_count > 0:
+                time.sleep(3)
+                active_commands_count = 0
+                for command in commands:
+                    active_commands_count += 1 if self._read_command(int(command.id)).active else 0
+            # Adding ApiCommand object to self
+            self.clusters_refresh_commands = [self._read_command(int(command.id)) for command in commands]
 
     def meta(self):
+        if self.parcels_refresh_command is not None:
+            parcel_refresh_command_meta = self.parcels_refresh_command.to_dict()
+        else:
+            parcel_refresh_command_meta = dict()
+
+        if self.clusters_refresh_commands is not None:
+            clusters_refresh_commands_meta = [command.to_dict() for command in self.clusters_refresh_commands]
+        else:
+            clusters_refresh_commands_meta = []
+
         meta = {
             "cluster_name": self.name,
             "config": f"{self.config}",
-            "parcel_refresh": self.parcels_refresh_command.to_dict() if self.parcels_refresh_command is not None else dict()
+            "parcel_refresh": parcel_refresh_command_meta,
+            "config_refresh": clusters_refresh_commands_meta,
         }
         return meta
 
@@ -118,7 +185,7 @@ def main():
     cm_client.configuration.password = params['cm_password']
     cm_client.configuration.host = api_url
     api_client = cm_client.ApiClient()
-    cm_config = CM(name=params["cm_host"], api_client=api_client)
+    cm_config = CM(name=params["cm_host"], api_client=api_client, module=module)
 
     if params["action"] == "infos":
         # Just get all info
