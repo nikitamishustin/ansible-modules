@@ -122,11 +122,11 @@ class Parcel:
         self.parcel_api_client_instance.start_distribution_command(self.cluster_name, self.name, self.version)
 
     @Decorators.try_cm_api
-    def _acrivate(self):
+    def _activate(self):
         self.parcel_api_client_instance.activate_command(self.cluster_name, self.name, self.version)
 
     @Decorators.try_cm_api
-    def _deacrivate(self):
+    def _deactivate(self):
         self.parcel_api_client_instance.deactivate_command(self.cluster_name, self.name, self.version)
 
     @Decorators.try_cm_api
@@ -162,12 +162,12 @@ class Parcel:
         if self.stage != "activated":
             if self.stage != "distributed":
                 self.distributed()
-            self._acrivate()
+            self._activate()
             self._check_transition()
             self.changed = True
 
     def deactivate(self):
-        self._deacrivate()
+        self._deactivate()
         self._check_transition()
 
     def undistribute(self):
