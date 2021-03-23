@@ -29,6 +29,7 @@ def build_module():
         "cm_password": {"required": True, "type": "str", "no_log": True},
         "cm_host": {"required": True, "type": "str"},
         "cm_port": {"required": False, "type": "str", "default": "7180"},
+        "cm_proto": {"required": False, "type": "str", "default": "http"},
         "api_version": {"required": False, "type": "str", "default": "18"},  # 18+
         "config_view": {"required": False, "type": "str"},  # Config size on "info": summary/full
         # Application params
@@ -76,7 +77,7 @@ class CM(object):
         # Init client params to connect to CM
         self.module = module
         params = self.module.params
-        api_url = f"http://{params['cm_host']}:{params['cm_port']}/api/v{params['api_version']}"
+        api_url = f"{params['cm_proto']}://{params['cm_host']}:{params['cm_port']}/api/v{params['api_version']}"
         cm_client.configuration.username = params['cm_login']
         cm_client.configuration.password = params['cm_password']
         cm_client.configuration.host = api_url
