@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import json
 import cm_client
 from cm_client.rest import ApiException
 from cm_client import (ApiConfig, ApiConfigList, ApiHost, ApiHostList, ApiCluster, ApiClusterList,
@@ -251,7 +250,7 @@ class ClusterManager(object):
 
 
 ########################################
-class CMClusterRestartManager(ClusterManager):
+class ClusterStateManager(ClusterManager):
     # Stop all services in the cluster.
     @ClusterManager.Decorators.try_cm_api
     def stop_cluster(self, cluster_name):
@@ -355,7 +354,7 @@ class CMClusterRestartManager(ClusterManager):
 def main():
     # Get ClusterManager object. All entities configs and initial validations must be prepared inside of it.
     module = build_module()
-    cm_instance = CMClusterRestartManager(module)
+    cm_instance = ClusterStateManager(module)
 
     # Updates config in the short view. If you want full configs - set the request parameter "config_view" to the "full"
     def update_configs(cm):
