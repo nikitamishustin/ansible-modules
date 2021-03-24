@@ -40,7 +40,7 @@ def build_module():
     return module
 
 
-class CM(object):
+class ClusterManager(object):
     def __init__(self, name, api_client, module):
         self.name = name
         self.module = module
@@ -170,7 +170,7 @@ class CM(object):
         return meta
 
     def __repr__(self):
-        return f'CM(name={self.name})'
+        return f'ClusterManager(name={self.name})'
 
     def __str__(self):
         return f"name: {self.name}"
@@ -185,7 +185,7 @@ def main():
     cm_client.configuration.password = params['cm_password']
     cm_client.configuration.host = api_url
     api_client = cm_client.ApiClient()
-    cm_config = CM(name=params["cm_host"], api_client=api_client, module=module)
+    cm_config = ClusterManager(name=params["cm_host"], api_client=api_client, module=module)
 
     if params["action"] == "infos":
         # Just get all info
