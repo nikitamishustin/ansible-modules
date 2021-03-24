@@ -72,9 +72,9 @@ def build_module():
 
 
 ########################################
-class CM(object):
+class ClusterManager(object):
     def __init__(self, module):
-        # Init client params to connect to CM
+        # Init client params to connect to ClusterManager
         self.module = module
         params = self.module.params
         api_url = f"{params['cm_proto']}://{params['cm_host']}:{params['cm_port']}/api/v{params['api_version']}"
@@ -137,7 +137,7 @@ class CM(object):
         # Debug
         self.debug_command = list()
 
-    # try-except for all the API calls to the CM
+    # try-except for all the API calls to the ClusterManager
     class Decorators(object):
         @classmethod
         def try_cm_api(cls, func):
@@ -244,16 +244,16 @@ class CM(object):
         }
 
     def __repr__(self):
-        return f'CM(name={self.name})'
+        return f'ClusterManager(name={self.name})'
 
     def __str__(self):
         return f"name: {self.name}"
 
 
 ########################################
-class CMClusterManage(CM):
+class CMClusterRestartManager(ClusterManager):
     # Stop all services in the cluster.
-    @CM.Decorators.try_cm_api
+    @ClusterManager.Decorators.try_cm_api
     def stop_cluster(self, cluster_name):
         # If all services already stopped - do nothing
         if len([serv for serv in self.services.items if serv.service_state != "STOPPED"]) > 0:
@@ -269,7 +269,7 @@ class CMClusterManage(CM):
             )
 
     # Start all services in the cluster.
-    @CM.Decorators.try_cm_api
+    @ClusterManager.Decorators.try_cm_api
     def start_cluster(self, cluster_name):
         # If all services already started - do nothing
         if len([serv for serv in self.services.items if serv.service_state != "STARTED"]) > 0:
@@ -285,7 +285,7 @@ class CMClusterManage(CM):
             )
 
     # Restart cluster
-    @CM.Decorators.try_cm_api
+    @ClusterManager.Decorators.try_cm_api
     def restart_cluster(self, cluster_name):
         stale_services_count = len([serv for serv in self.services.items if serv.config_staleness_status == "STALE"])
         if self.only_stale_services and stale_services_count == 0:
@@ -312,7 +312,7 @@ class CMClusterManage(CM):
 
     # Restart cluster in a rolling manner
     # !!!Enterprise license only!!!
-    @CM.Decorators.try_cm_api
+    @ClusterManager.Decorators.try_cm_api
     def rolling_restart_cluster(self, cluster_name):
         # If all services is stopped - do nothing
         services_to_restart = list()
@@ -351,10 +351,11 @@ class CMClusterManage(CM):
             self.changed = True
 
 
+########################################
 def main():
-    # Get CM object. All entities configs and initial validations must be prepared inside of it.
+    # Get ClusterManager object. All entities configs and initial validations must be prepared inside of it.
     module = build_module()
-    cm_instance = CMClusterManage(module)
+    cm_instance = CMClusterRestartManager(module)
 
     # Updates config in the short view. If you want full configs - set the request parameter "config_view" to the "full"
     def update_configs(cm):
