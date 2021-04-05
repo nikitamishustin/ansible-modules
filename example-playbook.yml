@@ -8,8 +8,8 @@
       cloudera_config_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: nmish-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         config_parameters: '{
           "COMMAND_EVICTION_AGE_HOURS": "17200",
           "TAGS_LIMIT": "100001"
@@ -20,8 +20,8 @@
       cloudera_role_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: nmish-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         services: hdfs1
         action: roles-set-config
         config_view: summary
@@ -36,8 +36,8 @@
       cloudera_role_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: nmish-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         services: hdfs1
         action: roles-get-config
         config_view: full
@@ -50,8 +50,8 @@
       cloudera_state_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: nmish-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         action: info
         config_view: summary
       register: message_to_print
@@ -68,7 +68,7 @@
       cloudera_state_manager:
         cm_login: admin
         cm_password:  admin
-        cm_host: nmish01-vm0
+        cm_host: dcher01-vm0
         cm_proto: http
         cm_port: 7180
         action: rolling-restart

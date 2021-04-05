@@ -22,8 +22,8 @@ Example playbook:
         cm_login: admin
         cm_password: admin
         cm_host: dcher01-vm0
-        name: REMOTE_PARCEL_REPO_URLS
-        value: "http://fusion-repo.wandisco.com/parcels/"
+        config_parameter: REMOTE_PARCEL_REPO_URLS
+        config_value: "http://fusion-repo.wandisco.com/parcels/"
         action: append
 
     - name: Activate parcels
@@ -31,7 +31,7 @@ Example playbook:
         cm_login: admin
         cm_password: admin
         cm_host: dcher01-vm0
-        cluster_name: DCHER-01
+        cluster: DCHER-01
         product: "{{ item }}"
         version: latest
         state: activated
@@ -43,8 +43,8 @@ Example playbook:
       cloudera_role_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: NMISH-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         services: zookeeper1
         action: roles-add
         roles: '[{"host":"nmish01-vm1.bdfrem.wandisco.com", "type":"SERVER"}]'
@@ -53,8 +53,8 @@ Example playbook:
       cloudera_role_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: NMISH-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         services: zookeeper1
         action: roles-start
         roles: '[{"host":"nmish01-vm1.bdfrem.wandisco.com", "type":"SERVER"}]'
@@ -63,8 +63,8 @@ Example playbook:
       cloudera_role_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: NMISH-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         services: zookeeper1
         action: roles-delete
         roles: '[{"host":"nmish01-vm1.bdfrem.wandisco.com", "type":"SERVER"}]'
@@ -73,8 +73,8 @@ Example playbook:
       cloudera_role_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: nmish-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         services: hdfs1
         action: roles-set-config
         config_view: summary
@@ -89,7 +89,7 @@ Example playbook:
       cloudera_state_manager:
         cm_login: admin
         cm_password:  admin
-        cm_host: nmish01-vm0
+        cm_host: dcher01-vm0
         cm_proto: http
         cm_port: 7180
         action: restart
@@ -110,7 +110,7 @@ Example playbook:
       cloudera_state_manager:
         cm_login: admin
         cm_password:  admin
-        cm_host: nmish01-vm0
+        cm_host: dcher01-vm0
         cm_proto: http
         cm_port: 7180
         action: rolling-restart
@@ -121,8 +121,8 @@ Example playbook:
       cloudera_role_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: NMISH-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         services: yarn1
         action: deploy-client-config
 
@@ -131,8 +131,8 @@ Example playbook:
       cloudera_state_manager:
         cm_login: admin
         cm_password: admin
-        cm_host: nmish01-vm0
-        cluster: nmish-01
+        cm_host: dcher01-vm0
+        cluster: DCHER-01
         action: info
         config_view: full
       register: message_to_print
